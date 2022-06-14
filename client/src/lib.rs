@@ -21,7 +21,7 @@ use solana_sdk::account::Account;
 use solana_sdk::bs58;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::signature::{Signature, Signer};
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Transaction, TransactionError};
 use std::convert::Into;
 use std::iter::Map;
 use std::rc::Rc;
@@ -213,6 +213,7 @@ impl Program {
                     Ok(logs) => {
                         let ctx = EventContext {
                             signature: logs.value.signature.parse().unwrap(),
+                            err: logs.value.err,
                             slot: logs.context.slot,
                         };
                         let mut logs = &logs.value.logs[..];
@@ -373,6 +374,7 @@ impl Execution {
 #[derive(Debug)]
 pub struct EventContext {
     pub signature: Signature,
+    pub err: Option<TransactionError>,
     pub slot: u64,
 }
 
