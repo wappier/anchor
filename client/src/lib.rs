@@ -222,7 +222,7 @@ impl Program {
                                 for l in logs {
                                     // Parse the log.
                                     let (event, new_program, did_pop) = {
-                                        if self_program_str == execution.program() {
+                                        if self_program_str == execution.program(l).unwrap() {
                                             handle_program_log(&self_program_str, l).unwrap_or_else(
                                                 |e| {
                                                     println!("Unable to parse log: {}", e);
@@ -322,7 +322,23 @@ fn handle_system_log(this_program_str: &str, log: &str) -> (Option<String>, bool
     if log.starts_with(&format!("Program {} log:", this_program_str)) {
         (Some(this_program_str.to_string()), false)
     } else if log.contains("invoke") {
-        (Some("cpi".to_string()), false) // Any string will do.
+        let re = Regex::new(r"^Program (.*) invoke.*$").unwrap();
+        let program = match re
+            .captures(log)
+            .ok_or_else(|| ClientError::LogParseError(log.to_string()))
+        {
+            Ok(c) => {
+                match c
+                    .get(1)
+                    .ok_or_else(|| ClientError::LogParseError(log.to_string()))
+                {
+                    Ok(program) => program.as_str().to_string(),
+                    Err(_) => "cpi".to_string(),
+                }
+            }
+            Err(_) => "cpi".to_string(),
+        };
+        (Some(program), false) // Any string will do.
     } else {
         let re = Regex::new(r"^Program (.*) success*$").unwrap();
         if re.is_match(log) {
@@ -356,9 +372,21 @@ impl Execution {
         })
     }
 
-    pub fn program(&self) -> String {
+    pub fn program(&mut self, log: &String) -> Result<String, ClientError> {
+        if self.stack.is_empty() {
+            let re = Regex::new(r"^Program (.*) invoke \[1\]$").unwrap();
+            let c = re
+                .captures(log)
+                .ok_or_else(|| ClientError::LogParseError(log.to_string()))?;
+            let program = c
+                .get(1)
+                .ok_or_else(|| ClientError::LogParseError(log.to_string()))?
+                .as_str()
+                .to_string();
+            return Ok(program);
+        }
         assert!(!self.stack.is_empty());
-        self.stack[self.stack.len() - 1].clone()
+        Ok(self.stack[self.stack.len() - 1].clone())
     }
 
     pub fn push(&mut self, new_program: String) {
